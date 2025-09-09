@@ -1,0 +1,107 @@
+import random
+
+# ----------------------
+# Fitness Function
+# ----------------------
+def fitness(position):
+    ia, see = position  # IA marks, SEE marks
+    score = ia + see
+
+    # penalties
+    if ia < 12:
+        score -= 20
+    if see < 25:
+        score -= 30
+    return score
+
+# ----------------------
+# Pass/Fail Status
+# ----------------------
+def pass_fail(position):
+    ia, see = position
+    if ia < 12:
+        return "Fail (IA too low)"
+    if see < 25:
+        return "Fail (SEE too low)"
+    if ia + see < 40:
+        return "Fail (Total below 40)"
+    return "Pass"
+
+# ----------------------
+# Particle Swarm Optimization (PSO)
+# ----------------------
+def pso(user_marks, num_particles=30, max_iter=50):
+    w = 0.7   # inertia weight
+    c1 = 1.5  # cognitive (particle)
+    c2 = 1.5  # social (swarm)
+
+    # Initialize particles (IA in [0,30], SEE in [0,70])
+    particles = [[random.uniform(0, 30), random.uniform(0, 70)] for _ in range(num_particles)]
+    velocities = [[random.uniform(-1, 1), random.uniform(-1, 1)] for _ in range(num_particles)]
+
+    # Insert user marks as one particle
+    particles[0] = user_marks[:]
+
+    # Personal and global bests
+    pbest = particles[:]
+    pbest_scores = [fitness(p) for p in particles]
+    gbest = pbest[pbest_scores.index(max(pbest_scores))]
+    gbest_score = max(pbest_scores)
+
+    # Iterations
+    for _ in range(max_iter):
+        for i in range(num_particles):
+            # Update velocity
+            r1, r2 = random.random(), random.random()
+            velocities[i][0] = (w * velocities[i][0] +
+                                 c1 * r1 * (pbest[i][0] - particles[i][0]) +
+                                 c2 * r2 * (gbest[0] - particles[i][0]))
+
+            velocities[i][1] = (w * velocities[i][1] +
+                                 c1 * r1 * (pbest[i][1] - particles[i][1]) +
+                                 c2 * r2 * (gbest[1] - particles[i][1]))
+
+            # Update position
+            particles[i][0] += velocities[i][0]
+            particles[i][1] += velocities[i][1]
+
+            # Keep within bounds
+            particles[i][0] = min(max(particles[i][0], 0), 30)
+            particles[i][1] = min(max(particles[i][1], 0), 70)
+
+            # Evaluate fitness
+            score = fitness(particles[i])
+            if score > pbest_scores[i]:
+                pbest[i] = particles[i][:]
+                pbest_scores[i] = score
+
+        # Update global best
+        max_score = max(pbest_scores)
+        if max_score > gbest_score:
+            gbest = pbest[pbest_scores.index(max_score)][:]
+            gbest_score = max_score
+
+    return gbest, gbest_score
+
+# ----------------------
+# Run PSO with user input
+# ----------------------
+if __name__ == "__main__":
+    ia_marks = float(input("Enter your IA marks (0-30): "))
+    see_marks = float(input("Enter your SEE marks (0-70): "))
+
+    user_marks = [ia_marks, see_marks]
+    user_score = fitness(user_marks)
+
+    print("\nYour Marks: IA =", ia_marks, ", SEE =", see_marks)
+    print("Raw Total (without penalties):", ia_marks + see_marks)
+    print("Your Fitness (with penalties):", user_score)
+    print("Status:", pass_fail(user_marks))
+
+    best_solution, best_score = pso(user_marks)
+    print("\nOptimized using PSO:")
+    print("Best IA Marks:", round(best_solution[0], 2))
+    print("Best SEE Marks:", round(best_solution[1], 2))
+    print("Raw Total (without penalties):", round(best_solution[0] + best_solution[1], 2))
+    print("Optimized Total Marks (with penalties):", round(best_score, 2))
+    print("Status:", pass_fail(best_solution))
