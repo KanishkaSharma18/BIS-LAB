@@ -1,0 +1,135 @@
+# Ant Colony Optimization (ACO) for Travelling Salesman Problem (TSP)
+import numpy as np
+import matplotlib.pyplot as plt
+
+# -----------------------------
+# TSP Problem Setup
+# -----------------------------
+np.random.seed(42)
+num_cities = 8   # smaller problem
+cities = np.random.rand(num_cities, 2) * 100  # 2D coordinates
+
+# Distance matrix
+def euclidean_distance(c1, c2):
+    return np.linalg.norm(c1 - c2)
+
+dist_matrix = np.array([[euclidean_distance(c1, c2) for c2 in cities] for c1 in cities])
+
+# Show cost matrix
+print("Cost (Distance) Matrix:")
+print(np.round(dist_matrix, 2))
+
+# Plot initial graph (all connections)
+plt.figure(figsize=(8,6))
+for i in range(num_cities):
+    for j in range(i+1, num_cities):
+        plt.plot([cities[i][0], cities[j][0]], [cities[i][1], cities[j][1]],
+                 c='lightgray', linewidth=0.7)
+plt.scatter(cities[:,0], cities[:,1], c='red', s=100, zorder=2)
+for idx, (x, y) in enumerate(cities):
+    plt.text(x+1, y+1, str(idx), fontsize=10)
+plt.title("TSP Graph: Cities and All Connections")
+plt.show()
+
+# -----------------------------
+# ACO Parameters
+# -----------------------------
+num_ants = 10
+num_iterations = 30
+alpha = 1
+beta = 5
+evaporation = 0.5
+Q = 100
+pheromone = np.ones((num_cities, num_cities))  # Initial pheromone
+
+# -----------------------------
+# ACO Core Functions
+# -----------------------------
+def probability(pheromone, dist_matrix, alpha, beta, current_city, unvisited):
+    pheromone_vals = pheromone[current_city][unvisited] ** alpha
+    heuristic_vals = (1 / dist_matrix[current_city][unvisited]) ** beta
+    probs = pheromone_vals * heuristic_vals
+    return probs / probs.sum()
+
+def ant_solution(pheromone, dist_matrix, alpha, beta):
+    num_cities = dist_matrix.shape[0]
+    start = np.random.randint(num_cities)
+    tour = [start]
+    unvisited = list(range(num_cities))
+    unvisited.remove(start)
+
+    while unvisited:
+        current_city = tour[-1]
+        probs = probability(pheromone, dist_matrix, alpha, beta, current_city, unvisited)
+        next_city = np.random.choice(unvisited, p=probs)
+        tour.append(next_city)
+        unvisited.remove(next_city)
+
+    return tour
+
+def tour_length(tour, dist_matrix):
+    return sum(dist_matrix[tour[i]][tour[(i+1) % len(tour)]] for i in range(len(tour)))
+
+# -----------------------------
+# Main ACO Loop
+# -----------------------------
+best_tour = None
+best_length = float("inf")
+best_lengths = []
+
+for iteration in range(num_iterations):
+    all_tours = []
+    all_lengths = []
+
+    # Each ant constructs a solution
+    for ant in range(num_ants):
+        tour = ant_solution(pheromone, dist_matrix, alpha, beta)
+        length = tour_length(tour, dist_matrix)
+        all_tours.append(tour)
+        all_lengths.append(length)
+
+        # Update best
+        if length < best_length:
+            best_tour = tour
+            best_length = length
+
+    best_lengths.append(best_length)
+
+    # Pheromone evaporation
+    pheromone *= (1 - evaporation)
+
+    # Pheromone update
+    for tour, length in zip(all_tours, all_lengths):
+        for i in range(len(tour)):
+            a, b = tour[i], tour[(i + 1) % len(tour)]
+            pheromone[a][b] += Q / length
+            pheromone[b][a] += Q / length
+
+# -----------------------------
+# Results
+# -----------------------------
+print("\nBest tour found:", best_tour)
+print("Best tour length:", best_length)
+
+# Show final pheromone matrix
+print("\nFinal Pheromone Matrix:")
+print(np.round(pheromone, 4))
+
+# Plot best tour
+best_coords = cities[best_tour + [best_tour[0]]]  # close the loop
+plt.figure(figsize=(8,6))
+plt.scatter(cities[:,0], cities[:,1], c='red')
+plt.plot(best_coords[:,0], best_coords[:,1], c='blue')
+for idx, (x, y) in enumerate(cities):
+    plt.text(x+1, y+1, str(idx), fontsize=10)
+plt.title(f"Best TSP Tour found by ACO\nLength = {best_length:.2f}")
+plt.show()
+
+# Plot convergence
+plt.figure(figsize=(8,6))
+plt.plot(range(1, num_iterations+1), best_lengths, marker='o')
+plt.title("Convergence of ACO on TSP")
+plt.xlabel("Iteration")
+plt.ylabel("Best Tour Length")
+plt.grid(True)
+plt.show()
