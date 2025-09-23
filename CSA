@@ -1,0 +1,119 @@
+import numpy as np
+import math
+import itertools
+
+# Levy flight (using Python math)
+def levy_flight(beta=1.5):
+    sigma = (math.gamma(1+beta) * math.sin(math.pi*beta/2) /
+            (math.gamma((1+beta)/2)*beta*2**((beta-1)/2)))**(1/beta)
+    u = np.random.randn() * sigma
+    v = np.random.randn()
+    step = u / abs(v)**(1/beta)
+    return step
+
+# -------------------------
+# Input Section
+# -------------------------
+n_items = int(input("Enter number of items: "))
+
+values = list(map(int, input("Enter values of items (space separated): ").split()))
+weights = list(map(int, input("Enter weights of items (space separated): ").split()))
+capacity = int(input("Enter knapsack capacity: "))
+
+if len(values) != n_items or len(weights) != n_items:
+    raise ValueError("Number of values/weights must match number of items!")
+
+# -------------------------
+# Objective Function (Fitness)
+# -------------------------
+def fitness(solution):
+    total_value = sum(solution[i] * values[i] for i in range(n_items))
+    total_weight = sum(solution[i] * weights[i] for i in range(n_items))
+    if total_weight > capacity:
+        return 0  # penalty if overweight
+    return total_value
+
+# -------------------------
+# Cuckoo Search Parameters
+# -------------------------
+n_nests = 15
+pa = 0.25
+n_iterations = 100
+
+# Generate initial population
+def init_population():
+    return [list(np.random.randint(0,2,n_items)) for _ in range(n_nests)]
+
+# Get new solution by flipping bits
+def get_new_solution(sol):
+    new_sol = sol.copy()
+    step_size = int(abs(levy_flight()) * n_items) % n_items
+    if step_size == 0:
+        step_size = 1
+    # Flip 'step_size' random bits
+    flip_indices = np.random.choice(range(n_items), step_size, replace=False)
+    for idx in flip_indices:
+        new_sol[idx] = 1 - new_sol[idx]
+    return new_sol  # Python list
+
+# -------------------------
+# Cuckoo Search Algorithm
+# -------------------------
+def cuckoo_search():
+    nests = init_population()  # all nests are Python lists
+    best_solution = nests[0]
+    best_fitness = fitness(best_solution)
+
+    for _ in range(n_iterations):
+        for i in range(n_nests):
+            new_sol = get_new_solution(nests[i])
+            if fitness(new_sol) > fitness(nests[i]):
+                nests[i] = new_sol
+
+        # Abandon some nests
+        for i in range(n_nests):
+            if np.random.rand() < pa:
+                nests[i] = list(np.random.randint(0,2,n_items))
+
+        # Update best solution
+        current_best = max(nests, key=fitness)
+        current_fitness = fitness(current_best)
+        if current_fitness > best_fitness:
+            best_solution = current_best
+            best_fitness = current_fitness
+
+    return best_solution, best_fitness
+
+# -------------------------
+# Brute Force (for comparison)
+# -------------------------
+def brute_force_knapsack():
+    best_solution = None
+    best_value = 0
+    print("\nAll possible combinations:")
+    for bits in itertools.product([0,1], repeat=n_items):
+        sol = list(bits)  # Python list
+        val = sum(sol[i] * values[i] for i in range(n_items))
+        wt = sum(sol[i] * weights[i] for i in range(n_items))
+        valid = "valid" if wt <= capacity else "invalid"
+        print(f"{sol} → value = {val}, weight = {wt} {valid}")
+        if wt <= capacity and val > best_value:
+            best_value = val
+            best_solution = sol
+    return best_solution, best_value
+
+# -------------------------
+# Run Both Approaches
+# -------------------------
+best_sol_csa, best_val_csa = cuckoo_search()
+best_sol_bf, best_val_bf = brute_force_knapsack()
+
+print("\nResult from Cuckoo Search Algorithm:")
+print("Best Solution (items picked):", best_sol_csa)
+print("Total Value:", int(best_val_csa))
+print("Total Weight:", int(sum(best_sol_csa[i] * weights[i] for i in range(n_items))))
+
+print("\nTrue Optimal Solution (by brute force):")
+print("Best Solution (items picked):", best_sol_bf)
+print("Total Value:", int(best_val_bf))
+print("Total Weight:", int(sum(best_sol_bf[i] * weights[i] for i in range(n_items))))
