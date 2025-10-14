@@ -1,0 +1,145 @@
+import numpy as np
+import random
+import string
+from collections import Counter
+
+# ==============================
+# --- Grey Wolf Optimization ---
+# ==============================
+def grey_wolf_optimizer(obj_func, dim, bounds, num_agents=12, max_iter=60):
+    alpha_pos = np.zeros(dim)
+    beta_pos = np.zeros(dim)
+    delta_pos = np.zeros(dim)
+
+    alpha_score = float("inf")
+    beta_score = float("inf")
+    delta_score = float("inf")
+
+    # Initialize wolves (random positions)
+    wolves = [np.random.uniform(bounds[0], bounds[1], dim) for _ in range(num_agents)]
+
+    for t in range(max_iter):
+        a = 2 - t * (2 / max_iter)  # linearly decreases from 2 → 0
+
+        for i, wolf in enumerate(wolves):
+            wolf = np.clip(wolf, bounds[0], bounds[1])
+            fitness = obj_func(wolf)
+
+            # Rank wolves
+            if fitness < alpha_score:
+                delta_score = beta_score
+                delta_pos = beta_pos.copy()
+                beta_score = alpha_score
+                beta_pos = alpha_pos.copy()
+                alpha_score = fitness
+                alpha_pos = wolf.copy()
+            elif fitness < beta_score:
+                delta_score = beta_score
+                delta_pos = beta_pos.copy()
+                beta_score = fitness
+                beta_pos = wolf.copy()
+            elif fitness < delta_score:
+                delta_score = fitness
+                delta_pos = wolf.copy()
+
+        # Update positions of wolves
+        for i, wolf in enumerate(wolves):
+            for j in range(dim):
+                r1, r2 = random.random(), random.random()
+
+                A1 = 2 * a * r1 - a
+                C1 = 2 * r2
+                D_alpha = abs(C1 * alpha_pos[j] - wolf[j])
+                X1 = alpha_pos[j] - A1 * D_alpha
+
+                r1, r2 = random.random(), random.random()
+                A2 = 2 * a * r1 - a
+                C2 = 2 * r2
+                D_beta = abs(C2 * beta_pos[j] - wolf[j])
+                X2 = beta_pos[j] - A2 * D_beta
+
+                r1, r2 = random.random(), random.random()
+                A3 = 2 * a * r1 - a
+                C3 = 2 * r2
+                D_delta = abs(C3 * delta_pos[j] - wolf[j])
+                X3 = delta_pos[j] - A3 * D_delta
+
+                wolf[j] = (X1 + X2 + X3) / 3
+
+            wolves[i] = np.clip(wolf, bounds[0], bounds[1])
+
+        print(f"Iteration {t+1}/{max_iter}, Best fitness = {alpha_score:.5f}")
+
+    return alpha_pos, alpha_score
+
+
+# ==============================
+# --- Cryptanalysis Setup ------
+# ==============================
+alphabet = string.ascii_uppercase
+
+def decrypt(ciphertext, key):
+    """Decrypt ciphertext using substitution cipher key."""
+    table = str.maketrans(key, alphabet)
+    return ciphertext.translate(table)
+
+# --- English letter frequency (fitness reference) ---
+english_freq = {
+    'E': 12.02, 'T': 9.10, 'A': 8.12, 'O': 7.68, 'I': 7.31, 'N': 6.95,
+    'S': 6.28, 'R': 6.02, 'H': 5.92, 'D': 4.32, 'L': 3.98, 'U': 2.88,
+    'C': 2.71, 'M': 2.61, 'F': 2.30, 'Y': 2.11, 'W': 2.09, 'G': 2.03,
+    'P': 1.82, 'B': 1.49, 'V': 1.11, 'K': 0.69, 'X': 0.17, 'Q': 0.11, 'J': 0.10, 'Z': 0.07
+}
+
+def letter_freq_score(text):
+    """Fitness function: lower score = closer to English letter frequencies."""
+    text = [c for c in text if c in alphabet]
+    freq = Counter(text)
+    total = sum(freq.values())
+    if total == 0:
+        return 1000
+    score = 0
+    for letter in alphabet:
+        observed = (freq.get(letter, 0) / total) * 100
+        expected = english_freq.get(letter, 0)
+        score += abs(observed - expected)
+    return score
+
+
+# ==============================
+# --- Main Program -------------
+# ==============================
+print("=== Grey Wolf Optimization for Cipher Cracking ===")
+ciphertext = input("Enter the ciphertext (A–Z only): ").upper().replace(" ", "")
+
+print("\n🐺 Running Grey Wolf Optimization to find best key...\n")
+
+# Define the objective function
+def obj_func(position):
+    order = np.argsort(position)
+    key = ''.join([alphabet[i] for i in order])
+    decrypted = decrypt(ciphertext, key)
+    return letter_freq_score(decrypted)
+
+# Run GWO
+best_pos, best_score = grey_wolf_optimizer(
+    obj_func=obj_func,
+    dim=len(alphabet),
+    bounds=(0, 1),
+    num_agents=12,
+    max_iter=60
+)
+
+# Construct best key from alpha wolf
+best_order = np.argsort(best_pos)
+best_key = ''.join([alphabet[i] for i in best_order])
+decrypted_text = decrypt(ciphertext, best_key)
+
+# ==============================
+# --- Results -----------------
+# ==============================
+print("\n✅ Best key found (approximation):", best_key)
+print("🔓 Decrypted Text Guess:", decrypted_text)
+print("📉 Fitness Score:", best_score)
+print("\n--- Process Complete ---")
+
