@@ -1,0 +1,89 @@
+import numpy as np
+import cv2
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+
+# -------------------------------
+# Step 1: Generate Shape
+# -------------------------------
+def generate_shape(shape_type, size=100):
+    """Generate a simple binary image of a shape."""
+    img = np.zeros((size, size), np.uint8)
+    if shape_type == "circle":
+        cv2.circle(img, (size//2, size//2), size//4, 255, -1)
+    elif shape_type == "square":
+        cv2.rectangle(img, (size//3, size//3), (2*size//3, 2*size//3), 255, -1)
+    elif shape_type == "triangle":
+        pts = np.array([[size//2, size//4], [size//4, 3*size//4], [3*size//4, 3*size//4]], np.int32)
+        cv2.fillPoly(img, [pts], 255)
+    else:
+        raise ValueError("Invalid shape. Choose from circle, square, triangle.")
+    return img
+
+# -------------------------------
+# Step 2: Parallel Cellular Update
+# -------------------------------
+def parallel_cellular_update(img):
+    """One step of parallel cellular update."""
+    kernel = np.ones((3, 3), np.float32)
+    neighbors = cv2.filter2D(img, -1, kernel)  # sum of neighborhood
+    new_img = np.where(neighbors > 4.5, 1.0, 0.0)  # local rule
+    return new_img
+
+# -------------------------------
+# Step 3: Shape Classification (Recognition)
+# -------------------------------
+def classify_shape(img):
+    """Recognize the evolved pattern."""
+    contours, _ = cv2.findContours((img*255).astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return "Unknown"
+    cnt = contours[0]
+    area = cv2.contourArea(cnt)
+    perimeter = cv2.arcLength(cnt, True)
+    circularity = 4 * np.pi * area / (perimeter**2 + 1e-6)
+    
+    if circularity > 0.7:
+        return "Circle"
+    elif len(cnt) >= 4 and circularity < 0.4:
+        return "Square"
+    else:
+        return "Triangle"
+
+# -------------------------------
+# Step 4: Visualization Function
+# -------------------------------
+def visualize_parallel_cellular(shape_type="circle", iterations=15):
+    img = generate_shape(shape_type)
+    img = img.astype(np.float32) / 255.0
+
+    fig, ax = plt.subplots(figsize=(5, 5))
+    plt.title(f"Parallel Cellular Evolution — {shape_type.capitalize()}")
+    im = ax.imshow(img, cmap="gray", animated=True)
+    ax.axis("off")
+
+    def update(frame):
+        nonlocal img
+        img = parallel_cellular_update(img)
+        im.set_array(img)
+        ax.set_title(f"Iteration {frame+1}")
+        return [im]
+
+    ani = FuncAnimation(fig, update, frames=iterations, interval=500, repeat=False)
+    plt.show()
+
+    recognized = classify_shape(img)
+    print(f"\n✅ Recognized Pattern: {recognized}")
+
+# -------------------------------
+# Step 5: User Input and Execution
+# -------------------------------
+if __name__ == "__main__":
+    print("Parallel Cellular Automata Pattern Recognition")
+    print("------------------------------------------------")
+    print("Available shapes: circle, square, triangle")
+    shape = input("Enter shape to generate and recognize: ").strip().lower()
+    try:
+        visualize_parallel_cellular(shape, iterations=15)
+    except ValueError as e:
+        print(e)
